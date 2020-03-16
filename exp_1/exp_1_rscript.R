@@ -20,6 +20,11 @@ library(ggsignif)
 library(lsr)
 library(sjmisc)
 library(sjstats)
+library(BayesFactor)
+library(foreign)
+library(dplyr)
+library(lattice)
+library(openxlsx)
 options(scipen=9999)
 
 # load data
