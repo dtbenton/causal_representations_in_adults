@@ -1,0 +1,5 @@
+Legend:
+
+q.type = 0 - perceptual; 1 - causal
+group = 0 - red; 1 - blue
+exp = 0 - kaily; 1 = marina
