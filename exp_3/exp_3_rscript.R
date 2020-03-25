@@ -2,7 +2,7 @@
 ########################################################
 ########################################################
 #############                              #############
-#############      EXPERIMENT 2 SCRIPT     #############
+#############      EXPERIMENT 3 SCRIPT     #############
 #############                              #############
 ########################################################
 ########################################################
@@ -28,57 +28,52 @@ options(scipen=9999)
 
 # load data
 D = read.csv(file.choose(), header = TRUE)
+D$X = NULL
+D = D[c(1:32),]
 
 # reorder columns
-D = as.data.frame(D[,c(1,2,3,9,5,7,4,10,6,8,11,12)])
+D = as.data.frame(D[,c(1,2,3,5,7,9,4,6,8,10,11)])
+
 
 # reshape the data
-D_tall = reshape(D, varying = 3:10, v.names = "measure", timevar = "condition", 
-                 idvar = "ID", 
-                 new.row.names = 1:512, direction = "long")
+D_tall = reshape(D, varying = 3:10, v.names = "measure", 
+                 timevar = "condition", idvar = "ID", 
+                 new.row.names = 1:256, direction = "long")
 
 # order data
 D_tall = D_tall[order(D_tall$ID),]
 
-
-
 # convert all categorical variables to 'factors'
-D_tall$q.type.cat = as.factor(rep(c(0,1), each = 4, times = 64))
+D_tall$q.type.cat = as.factor(rep(c(0,1), each = 4, times = 32))
 D_tall$q.type.cat = revalue(x = as.factor(D_tall$q.type.cat),
                             c("0"="Perceptual", "1"="Causal"))
 
 D_tall$q.type = revalue(x = as.factor(D_tall$q.type), 
-                                                c("0" = "Perceptual_First", 
-                                                  "1"="Causal_First")) # this corresponds to whether participants
-                                                                       # were asked the causal or perceptual question
-                                                                       # first.
+                        c("0" = "Perceptual_First", 
+                          "1"="Causal_First")) # this corresponds to whether participants
+# were asked the causal or perceptual question
+# first.
 
 D_tall$exp = revalue(x = as.factor(D_tall$exp),
-                       c("0" = "Kaily", "1" = "Marina"))
-
-
-D_tall$group = revalue(x = as.factor(D_tall$group),
-                     c("0" = "Red", "1" = "Blue"))
+                     c("0" = "Kaily", "1" = "Marina"))
 
 
 D_tall$test_trials = as.factor(rep(c(1:4), each = 1, 
-                                   times = 128))
+                                   times = 64))
 D_tall$test_trials = revalue(x = as.factor(D_tall$test_trials),
-                       c("1" = "gBgR", "2" = "gRgB",
-                         "3" = "gBRg", "4" = "gRBg"))
+                             c("1" = "GfCf", "2" = "GfCn",
+                               "3" = "GnCf", "4" = "GnCn"))
 
-
+# names D_tall
+"ID"         "exp"        "q.type"     "condition"  "measure"    "q.type.cat"
 
 # drop unnecessary columns and reorder 'D_tall'
 D_tall$row.names = NULL
 D_tall$condition = NULL
-D_tall = D_tall[,c(1,2,4,3,6,7,5)]
+
+# reorder columns of 'D_tall'
+D_tall = D_tall[,c(1,2,3,5,6,4)]
 names(D_tall)
-dim(D_tall)
-
-# names of column in 'D_tall'
-# "ID"         "exp"        "group"      "q.type"     "q.type.cat" "measure" 
-
 
 ########################################################
 #############                              #############
@@ -89,7 +84,7 @@ dim(D_tall)
 ## NORMALITY CHECKS
 par(mfrow=c(4,2)) 
 for(i in c("Perceptual","Causal")){
-  for(j in c("gBgR","gRgB","gBRg","gRBg")){
+  for(j in c("GfCf","GfCn","GnCf","GnCn")){
     hist(D_tall$measure[D_tall$test_trials==j], breaks=5)
   }
 }
@@ -97,24 +92,27 @@ par(mfrow=c(1,1))
 
 
 # formal test of normality
-shapiro.ps = rep(0,8)
+shapiro.ps = as.data.frame(matrix(NA, nrow=4, ncol=1, byrow = TRUE)) 
+k = 1
 for(i in c("Perceptual","Causal")){
-  for(j in c("gBgR","gRgB","gBRg","gRBg")){
-    shap.calc = shapiro.test(D_tall$measure[D_tall$test_trials==j])
-    shapiro.ps[i] = shap.calc$p.value
+  for(j in c("GfCf","GfCn","GnCf","GnCn")){
+    shap.calc = shap.calc = shapiro.test(D_tall$measure[D_tall$test_trials==j & D_tall$q.type.cat==i])
+    shapiro.ps[k,] = shap.calc$p.value
+    k = k+1
   }
 }
+shapiro.ps
 
 
 ## HOMOSKEDASTICITY CHECKS
 # plot the boxplots
 init_box_plots = ggplot(D_tall, aes(x = test_trials, 
-                                 y = measure)) + geom_boxplot() + facet_wrap(~q.type.cat)
+                                    y = measure)) + geom_boxplot() + facet_wrap(~q.type.cat)
 init_box_plots
 
 par(mfrow=c(4,2))
 for (i in c("Perceptual","Causal")){
-  for(j in c("gBgR","gRgB","gBRg","gRBg")){
+  for(j in c("GfCf","GfCn","GnCf","GnCn")){
     boxplot(D_tall$measure[D_tall$q.type.cat==i & D_tall$test_trials==j], breaks=21)
   }
 } 
@@ -124,18 +122,17 @@ par(mfrow=c(1,1))
 # perceptual
 levene_test_vec = rep(0,2)
 for (i in c("Perceptual","Causal")){
-    calc = leveneTest(D_tall$measure[D_tall$q.type.cat==i], 
-                      as.factor(D_tall$test_trials[D_tall$q.type.cat==i]),
-                      center = median)$"Pr(>F)"[[1]] 
-    levene_test_vec[i] = calc
+  calc = leveneTest(D_tall$measure[D_tall$q.type.cat==i], 
+                    as.factor(D_tall$test_trials[D_tall$q.type.cat==i]),
+                    center = median)$"Pr(>F)"[[1]] 
+  levene_test_vec[i] = calc
 }
 levene_test_vec
 
 
 ## ASSUMPTION CHECK NOTES ##
-# Despite the fact that there is no evidence of heteroskedasticity, because
-# there is evidence of non-normality, non-parametric boostrapping and permuation
-# testing will be used to estimate confidence intervals and for hypothesis checking
+# There is both evidence of nonnormality and heteroskedasticity.
+
 
 
 ####################
@@ -198,6 +195,8 @@ anova(model_2,model_3)
 # around the group intercept is the best model. Here, this is model_2. Thus, in all subsequent
 # analyses random-effect intercepts will be included for subjects.
 
+
+
 ########################################################
 ########################################################
 ########################################################
@@ -212,7 +211,7 @@ anova(model_2,model_3)
 #### PRELIMINARY ANALYSIS ####
 ##############################
 # analysis to determine effect of question type and 
-lme.fit.prelim = lme(measure~(q.type+group)^2, random=~1|ID, data=D_tall)
+lme.fit.prelim = lme(measure~q.type, random=~1|ID, data=D_tall)
 anova.lme(lme.fit.prelim)
 
 ## PRELIMINARY ANALYSIS NOTES
@@ -224,112 +223,79 @@ anova.lme(lme.fit.prelim)
 #### MAIN ANALYSIS ####
 #######################
 lme.fit.main = lme(measure~(test_trials+q.type.cat)^2, random=~1|ID, 
-                          data = D_tall)
+                   data = D_tall)
 anova.lme(lme.fit.main)
 
-# Follow-up analyses for rating type (i.e., perceptual v. causal rating) #
-mean(D_tall$measure[D_tall$q.type.cat=="Perceptual"])
-mean(D_tall$measure[D_tall$q.type.cat=="Causal"])
-perm_func(D_tall$measure,D_tall$q.type.cat,"Causal","Perceptual")
-BF_01 = ttestBF(D_tall$measure[D_tall$q.type.cat=="Perceptual"],
-        D_tall$measure[D_tall$q.type.cat=="Causal"], paired=TRUE)
-BF_01
-  
-
-# SD of causal question type
-main_boot("Causal",5,7)
-
-# SD of perceptual question type
-main_boot("Perceptual",5,7)
 
 
 # Follow-up analyses for test trial (i.e., gBgR, gRgB, gBRg,gRBg) #
 test_trial_means = rep(0,4)
-for(i in c("gBgR","gRgB","gBRg","gRBg")){
+for(i in c("GfCf","GfCn","GnCf","GnCn")){
   calc = mean(D_tall$measure[D_tall$test_trials==i])
   test_trial_means[i] = calc
 }
 test_trial_means
 
-# gBgR stats #
-mean(D_tall$measure[D_tall$test_trials=="gBgR"])
-main_boot("gBgR",6,7)
+# GfCf stats #
+mean(D_tall$measure[D_tall$test_trials=="GfCf"])
+main_boot("GfCf",5,6)
 
-# gRgB stats #
-mean(D_tall$measure[D_tall$test_trials=="gRgB"])
-main_boot("gRgB",6,7)
+# GfCn stats #
+mean(D_tall$measure[D_tall$test_trials=="GfCn"])
+main_boot("GfCn",5,6)
 
-# gBRg stats #
-mean(D_tall$measure[D_tall$test_trials=="gBRg"])
-main_boot("gBRg",6,7)
+# GnCf stats #
+mean(D_tall$measure[D_tall$test_trials=="GnCf"])
+main_boot("GnCf",5,6)
 
-# gRBg stats #
-mean(D_tall$measure[D_tall$test_trials=="gRBg"])
-main_boot("gRBg",6,7)
+# GnCn stats #
+mean(D_tall$measure[D_tall$test_trials=="GnCn"])
+main_boot("GnCn",5,6)
 
 
 # comparisons #
 
-# gBgR v gBRg
-perm_func(D_tall$measure,D_tall$test_trials,"gBgR","gBRg") # p = .04
-BF_02 = ttestBF(D_tall$measure[D_tall$test_trials=="gBgR"],
-                D_tall$measure[D_tall$test_trials=="gBRg"], paired=TRUE)
-BF_02 # BF10 = 31
+# GfCf v GnCf
+perm_func(D_tall$measure,D_tall$test_trials,"GfCf","GnCf") # p = .0001
+BF_02 = ttestBF(D_tall$measure[D_tall$test_trials=="GfCf"],
+                D_tall$measure[D_tall$test_trials=="GnCf"], paired=TRUE)
+BF_02 # BF10 = 517142034061438
 
 
-# gBgR v gRBg
-perm_func(D_tall$measure,D_tall$test_trials,"gBgR","gRBg") # p = .075
-BF_03 = ttestBF(D_tall$measure[D_tall$test_trials=="gBgR"],
-                D_tall$measure[D_tall$test_trials=="gRBg"], paired=TRUE)
-BF_03 # BF10 = 3
+# GfCf v GnCn
+perm_func(D_tall$measure,D_tall$test_trials,"GfCf","GnCn") # p = .0001
+BF_03 = ttestBF(D_tall$measure[D_tall$test_trials=="GfCf"],
+                D_tall$measure[D_tall$test_trials=="GnCn"], paired=TRUE)
+BF_03 # BF10 = 581590000417302
 
 
 
-# gRgB v gBRg
-perm_func(D_tall$measure,D_tall$test_trials,"gRgB","gBRg") # p < .01
-BF_04 = ttestBF(D_tall$measure[D_tall$test_trials=="gRgB"],
-                D_tall$measure[D_tall$test_trials=="gBRg"], paired=TRUE)
-BF_04 # BF10 = 291
+# GfCn v GnCf
+perm_func(D_tall$measure,D_tall$test_trials,"GfCn","GnCf") # p = .0001
+BF_04 = ttestBF(D_tall$measure[D_tall$test_trials=="GfCn"],
+                D_tall$measure[D_tall$test_trials=="GnCf"], paired=TRUE)
+BF_04 # BF10 = 2651
 
 
-# gRgB v gRBg
-perm_func(D_tall$measure,D_tall$test_trials,"gRgB","gRBg") # p = .02
-BF_05 = ttestBF(D_tall$measure[D_tall$test_trials=="gRgB"],
-                D_tall$measure[D_tall$test_trials=="gRBg"], paired=TRUE)
-BF_05 # BF10 = 104
+# GfCn v GnCn
+perm_func(D_tall$measure,D_tall$test_trials,"GfCn","GnCn") # p = 1
+BF_05 = ttestBF(D_tall$measure[D_tall$test_trials=="GfCn"],
+                D_tall$measure[D_tall$test_trials=="GnCn"], paired=TRUE)
+BF_05 # BF10 = 80
 
 
-# gBgR v gRgB
-perm_func(D_tall$measure,D_tall$test_trials,"gBgR","gRgB") # p = 1
-BF_06 = ttestBF(D_tall$measure[D_tall$test_trials=="gBgR"],
-                D_tall$measure[D_tall$test_trials=="gRgB"], paired=TRUE)
-BF_06 # BF10 = .18
+# GfCf v GfCn
+perm_func(D_tall$measure,D_tall$test_trials,"GfCf","GfCn") # p = .0001
+BF_06 = ttestBF(D_tall$measure[D_tall$test_trials=="GfCf"],
+                D_tall$measure[D_tall$test_trials=="GfCn"], paired=TRUE)
+BF_06 # BF10 = 19046878
 
 
-# gBRg v gRBg
-perm_func(D_tall$measure,D_tall$test_trials,"gBRg","gRBg") # p = 1
-BF_07 = ttestBF(D_tall$measure[D_tall$test_trials=="gBRg"],
-                D_tall$measure[D_tall$test_trials=="gRBg"], paired=TRUE)
-BF_07 # BF10 = .15
-
-
-##################################
-# INDIVIDUAL DIFFERENCE ANALYSIS #
-##################################
-# This analysis makes it possible to determine how many participants
-# conformed with the independence relation predictions
-B = D
-B$ind_dif = rep(0,nrow(B))
-for(i in 1:64){
-  if(mean(c(B$gbgr.perceptual.rating[i],B$gbgr.causal.rating[i]))>mean(c(B$gbrg.perceptual.rating[i],B$gbrg.causal.rating[i]))&
-     mean(c(B$gbgr.perceptual.rating[i],B$gbgr.causal.rating[i]))>mean(c(B$grbg.perceptual.rating[i],B$grbg.causal.rating[i]))&
-     mean(c(B$grgb.perceptual.rating[i],B$grgb.causal.rating[i]))>mean(c(B$gbrg.perceptual.rating[i],B$gbrg.causal.rating[i]))&
-     mean(c(B$grgb.perceptual.rating[i],B$grgb.causal.rating[i]))>mean(c(B$grbg.perceptual.rating[i],B$grbg.causal.rating[i]))){
-    B$ind_dif[i] = 1
-  }else{
-    B$ind_dif[i] = 0
-  }
-}
+# GnCf v GnCn
+perm_func(D_tall$measure,D_tall$test_trials,"GnCf","GnCn") # p = 1
+BF_07 = ttestBF(D_tall$measure[D_tall$test_trials=="GnCf"],
+                D_tall$measure[D_tall$test_trials=="GnCn"], paired=TRUE)
+BF_07 # BF10 = .81
 
 
 
@@ -350,20 +316,24 @@ condition_barplot + stat_summary(fun.y = mean, geom = "bar", position = "dodge",
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(), axis.line = element_line(colour = "black")) + # remove the major and minor grids
   scale_y_continuous(expand = c(0, 0)) + # ensure that bars hit the x-axis
-  coord_cartesian(ylim=c(0, 115)) +
+  coord_cartesian(ylim=c(0, 120)) +
   scale_fill_manual(values=c("white", "white", "white", "white")) +
   theme_classic() +
-  geom_signif(comparisons = list(c("gBgR", "gBRg")), 
-              annotations=c("p = .04, BF = 31"), y_position = 105, tip_length = 0.003) +
-  geom_signif(comparisons = list(c("gBgR", "gRBg")), 
-              annotations=c("p = .07, BF = 3"), 
-              y_position = 98, tip_length = 0.003) +
-  geom_signif(comparisons = list(c("gRgB", "gBRg")), 
-              annotations=c("p = .01, BF = 291"), 
-              y_position = 92, tip_length = 0.003) +
-  geom_signif(comparisons = list(c("gRgB", "gRBg")), 
-              annotations=c("p = .02, BF = 104"), 
-              y_position = 85, tip_length = 0.003) +
+  geom_signif(comparisons = list(c("GfCf", "GfCn")), 
+              annotations=c("p = .0001, BF = 4,000"), y_position = 115, tip_length = 0.003) +
+  geom_signif(comparisons = list(c("GfCf", "GnCf")), 
+              annotations=c("p = .0001, BF = 4,000"), 
+              y_position = 108, tip_length = 0.003) +
+  geom_signif(comparisons = list(c("GfCf", "GnCn")), 
+              annotations=c("p = .0001, BF = 4,000"), 
+              y_position = 102, tip_length = 0.003) +
+  geom_signif(comparisons = list(c("GfCn", "GnCf")), 
+              annotations=c("p = .0001, BF = 2651"), 
+              y_position = 93, tip_length = 0.003) +
+  geom_signif(comparisons = list(c("GfCn", "GnCn")), 
+              annotations=c("p = .001, BF = 80"), 
+              y_position = 88, tip_length = 0.003) +
+  theme(legend.position="none") +
   theme(legend.position="none") +
   theme(strip.text = element_text(colour = 'black', size = 12)) + # this changes the size and potentially weight of the facet labels
   labs(x = "Test trials")
